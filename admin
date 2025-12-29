@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Barbearia</title>
+
+<style>
+body{
+background:#111;
+color:#fff;
+font-family:Arial;
+padding:20px
+}
+
+h1{text-align:center;color:#c59d5f}
+
+.login,.pedido,.dashboard{
+background:#1c1c1c;
+padding:20px;
+border-radius:8px;
+max-width:500px;
+margin:20px auto
+}
+
+input,button{
+width:100%;
+padding:12px;
+margin-top:10px;
+border:none;
+border-radius:5px
+}
+
+button{
+background:#c59d5f;
+font-weight:bold;
+cursor:pointer
+}
+
+.confirmar{background:#2e7d32;color:#fff}
+.recusar{background:#8b0000;color:#fff}
+.sair{background:#444;margin-bottom:15px}
+
+#adminArea{display:none}
+
+.barra{
+height:40px;
+margin-top:10px;
+border-radius:6px;
+display:flex;
+align-items:center;
+padding-left:12px;
+font-weight:bold;
+white-space:nowrap
+}
+
+.clientes{background:#2e7d32}
+.valor{background:#c59d5f;color:#000}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div id="loginBox" class="login">
+<h1>Login Admin</h1>
+<input type="text" id="usuario" placeholder="Usuário">
+<input type="password" id="senha" placeholder="Senha">
+<button id="btnLogin">Entrar</button>
+<p id="erro" style="color:red;display:none;text-align:center">
+Usuário ou senha inválidos
+</p>
+</div>
+
+<!-- PAINEL -->
+<div id="adminArea">
+<button class="sair" id="btnSair">Sair</button>
+<h1>Painel do Administrador</h1>
+
+<div class="dashboard">
+<p>👥 Clientes hoje: <b id="qtdClientes">0</b></p>
+<p>💰 Faturamento hoje: <b>R$ <span id="valorHoje">0</span></b></p>
+
+<div class="barra clientes" id="barraClientes">0 clientes</div>
+<div class="barra valor" id="barraValor">R$ 0</div>
+</div>
+
+<div id="listaAdmin"></div>
+</div>
+
+<script>
+/* 🔐 CREDENCIAIS */
+const USER = "admin";
+const PASS = "1234";
+
+/* 💰 PREÇOS */
+const precos = {
+  "Corte": 30,
+  "Barba": 20,
+  "Corte + Barba": 45
+};
+
+/* 🔎 ELEMENTOS */
+const loginBox = document.getElementById("loginBox");
+const adminArea = document.getElementById("adminArea");
+const erro = document.getElementById("erro");
+
+const btnLogin = document.getElementById("btnLogin");
+const btnSair = document.getElementById("btnSair");
+
+/* ✅ LOGIN */
+btnLogin.addEventListener("click", login);
+btnSair.addEventListener("click", logout);
+
+/* mantém sessão */
+if (sessionStorage.getItem("adminLogado") === "true") {
+  mostrarAdmin();
+}
+
+function login(){
+  const u = document.getElementById("usuario").value;
+  const s = document.getElementById("senha").value;
+
+  if(u === USER && s === PASS){
+    sessionStorage.setItem("adminLogado","true");
+    mostrarAdmin();
+  } else {
+    erro.style.display = "block";
+  }
+}
+
+function logout(){
+  sessionStorage.removeItem("adminLogado");
+  location.reload();
+}
+
+function mostrarAdmin(){
+  loginBox.style.display = "none";
+  adminArea.style.display = "block";
+  carregarAdmin();
+  calcularHoje();
+}
+
+/* 📋 LISTA */
+function carregarAdmin(){
+  const lista = document.getElementById("listaAdmin");
+  let ag = JSON.parse(localStorage.getItem("agendamentos")) || [];
+  lista.innerHTML = "";
+
+  if(ag.length === 0){
+    lista.innerHTML = "<p style='text-align:center'>Nenhum agendamento.</p>";
+    return;
+  }
+
+  ag.forEach((a,i)=>{
+    const d = document.createElement("div");
+    d.className = "pedido";
+
+    d.innerHTML = `
+      <b>${a.nome}</b><br>
+      📅 ${a.data} às ${a.hora}<br>
+      ✂️ ${a.servico}<br>
+      Status: <b>${a.status}</b>
+    `;
+
+    if(a.status === "pendente"){
+      const c = document.createElement("button");
+      c.textContent = "Confirmar";
+      c.className = "confirmar";
+      c.onclick = () => atualizar(i,"confirmado");
+
+      const r = document.createElement("button");
+      r.textContent = "Recusar";
+      r.className = "recusar";
+      r.onclick = () => atualizar(i,"recusado");
+
+      d.appendChild(c);
+      d.appendChild(r);
+    }
+
+    lista.appendChild(d);
+  });
+}
+
+function atualizar(i,status){
+  let ag = JSON.parse(localStorage.getItem("agendamentos")) || [];
+  ag[i].status = status;
+  localStorage.setItem("agendamentos", JSON.stringify(ag));
+  carregarAdmin();
+  calcularHoje();
+}
+
+/* 📊 RESUMO DO DIA */
+function calcularHoje(){
+  let ag = JSON.parse(localStorage.getItem("agendamentos")) || [];
+  const hoje = new Date();
+  const hojeStr =
+    hoje.getFullYear() + "-" +
+    String(hoje.getMonth()+1).padStart(2,"0") + "-" +
+    String(hoje.getDate()).padStart(2,"0");
+
+  let clientes = 0;
+  let total = 0;
+
+  ag.forEach(a=>{
+    if(a.status === "confirmado" && a.data === hojeStr){
+      clientes++;
+      total += precos[a.servico] || 0;
+    }
+  });
+
+  document.getElementById("qtdClientes").textContent = clientes;
+  document.getElementById("valorHoje").textContent = total;
+
+  const barraClientes = document.getElementById("barraClientes");
+  const barraValor = document.getElementById("barraValor");
+
+  barraClientes.style.width = Math.min(clientes * 20, 100) + "%";
+  barraClientes.textContent = clientes + " clientes";
+
+  barraValor.style.width = Math.min(total, 100) + "%";
+  barraValor.textContent = "R$ " + total;
+}
+</script>
+
+</body>
+</html>
