@@ -1,0 +1,45 @@
+# Base44 sandbox runbook.
+#
+# This repo is one static page (`admin`, no file extension): plain HTML + inline CSS
+# + vanilla JS. It has no build step, no dependencies and no backend, so there is
+# nothing to install and no dev-server/watch process to run — nginx serves the file
+# straight from the bind-mounted source on host port 3000 (the preview entry point),
+# and edits appear on the next page load.
+services:
+  web:
+    image: nginx:alpine
+    restart: on-failure
+    # The sandbox checks this repo out with mode 0700, which the unprivileged
+    # nginx worker cannot traverse, so it must be made traversable (0755 — no
+    # write bit added) after the bind mount exists and before nginx starts.
+    # Everything else keeps nginx's default unprivileged `nginx` worker user.
+    command:
+      [
+        "sh",
+        "-ec",
+        "chmod 755 /usr/share/nginx/html && exec nginx -g 'daemon off;'",
+      ]
+    ports:
+      - "3000:3000"
+    volumes:
+      # Bind-mount the cloned source so edits are served live. Mounted
+      # read-write only so the startup step below can relax the repo root's
+      # 0700 mode; the server itself never writes here.
+      - .:/usr/share/nginx/html
+      # Sandbox-only server config: listen on 3000, serve `admin` as HTML.
+      - ./.base44/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    labels:
+      base44.project: "Barbearia Admin"
+      base44.kind: "web"
+      base44.port: "3000"
+    healthcheck:
+      # Probes the actually served page, not just an open port.
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:3000/ | grep -q 'Login Admin' || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
